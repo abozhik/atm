@@ -1,165 +1,82 @@
 package atm;
 
-import bank.Bank;
-import bank.BankNumberOne;
-import card.Card;
-import card.VerifiedCard;
-import card.type.DebitCard;
-import cell.CurrencyCell;
-import exception.NotEnoughMoneyException;
-import exception.NotVerifiedCardException;
-import nominal.CurrencyCode;
-import nominal.Euro;
-import nominal.RussianRuble;
-import nominal.UnitedStatesDollar;
 import org.junit.jupiter.api.Test;
-import validator.ValidatorImpl;
+import ru.andrey.atm.*;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static ru.andrey.atm.Nominal.*;
 
 class AtmTest {
 
-    private final Atm atm;
-    private final Bank bank;
+    private Atm atm;
 
     public AtmTest() {
-        SortedMap<Integer, Integer> banknotesMap = new TreeMap<>();
-        banknotesMap.put(50, 100);
-        banknotesMap.put(100, 100);
-        banknotesMap.put(200, 100);
-        banknotesMap.put(500, 100);
-        banknotesMap.put(1000, 100);
-        banknotesMap.put(2000, 100);
-        banknotesMap.put(5000, 100);
-        var rubleCurrencyCell = new CurrencyCell<>(new RussianRuble(), banknotesMap);
-        var dollarCurrencyCell = new CurrencyCell<>(new UnitedStatesDollar(), banknotesMap);
-        var euroCurrencyCell = new CurrencyCell<>(new Euro(), banknotesMap);
-        bank = new BankNumberOne(new ValidatorImpl(), "one");
-        atm = new BankAtm(bank, rubleCurrencyCell, euroCurrencyCell, dollarCurrencyCell);
+        Map<Nominal, Cell> banknotesMap = new HashMap<>();
+        banknotesMap.put(N_50, new Cell(N_50, 100));
+        banknotesMap.put(N_100, new Cell(N_100, 100));
+        banknotesMap.put(N_200, new Cell(N_200, 100));
+        banknotesMap.put(N_500, new Cell(N_500, 100));
+        banknotesMap.put(N_1000, new Cell(N_1000, 100));
+        banknotesMap.put(N_2000, new Cell(N_2000, 100));
+        banknotesMap.put(N_5000, new Cell(N_5000, 100));
+        atm = new BankAtm(banknotesMap);
     }
-
+    
     @Test
-    void insertCardTest() {
+    void getBalanceTest() {
         //given
-        Card cardOld = atm.getCurrentCard();
-        Card card = new Card(bank, new DebitCard());
+        Map<Nominal, Cell> banknotesMap = new HashMap<>();
+        banknotesMap.put(N_50, new Cell(N_50, 100));
+        banknotesMap.put(N_1000, new Cell(N_1000, 50));
+        banknotesMap.put(N_5000, new Cell(N_5000, 30));
+        atm = new BankAtm(banknotesMap);
         //when
-        atm.insertCard(card);
+        int balance = atm.getBalance();
         //then
-        assertThat(cardOld).isNull();
-        assertThat(atm.getCurrentCard()).isNotNull();
+        assertThat(balance).isEqualTo(205_000);
     }
 
+
     @Test
-    void enterPinTest() throws NotVerifiedCardException {
+    void depositTest() {
         //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
+        int balanceOld = atm.getBalance();
+        Map<Banknote, Integer> banknotesMap = new HashMap<>();
+        banknotesMap.put(new Banknote(N_500), 3);
+        banknotesMap.put(new Banknote(N_1000), 2);
         //when
-        atm.enterPin("1234");
+        atm.deposit(banknotesMap);
         //then
-        assertThat(atm.getCurrentCard()).isInstanceOf(VerifiedCard.class);
+        int balanceNew = atm.getBalance();
+        assertThat(balanceNew - (balanceOld)).isEqualTo(3_500);
     }
 
     @Test
-    void getBalanceTest() throws NotVerifiedCardException {
+    void withdrawTest() throws NotEnoughMoneyException {
         //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
-        atm.enterPin("1234");
+        int amount = 6750;
         //when
-        BigDecimal balance = atm.getBalance();
-        //then
-        assertThat(balance).isEqualTo(((VerifiedCard) atm.getCurrentCard()).getBalance());
-    }
-
-
-    @Test
-    void getBalanceTestWithoutPinCode() {
-        //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
-        //when
-        try {
-            atm.getBalance();
-        } catch (NotVerifiedCardException e) {
-            //then
-            assertThat(e).isNotNull();
-        }
-    }
-
-    @Test
-    void countTotalTest() {
-        //given
-        Map<Integer, Integer> banknotesMap = new HashMap<>();
-        banknotesMap.put(500, 3);
-        banknotesMap.put(1000, 2);
-        banknotesMap.put(5000, 4);
-        //when
-        BigDecimal total = atm.countTotal(banknotesMap);
-        //then
-        assertThat(total).isEqualTo(new BigDecimal(23_500).setScale(2, RoundingMode.CEILING));
-    }
-
-    @Test
-    void putTest() throws NotVerifiedCardException {
-        //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
-        atm.enterPin("1234");
-        ((VerifiedCard) atm.getCurrentCard()).setBalance(new BigDecimal(10_000));
-
-        BigDecimal balanceOld = atm.getBalance();
-        Map<Integer, Integer> banknotesMap = new HashMap<>();
-        banknotesMap.put(500, 3);
-        banknotesMap.put(1000, 2);
-        //when
-        atm.put(banknotesMap);
-        //then
-        BigDecimal balanceNew = atm.getBalance();
-        assertThat(balanceNew.subtract(balanceOld)).isEqualTo(new BigDecimal(3_500).setScale(2, RoundingMode.CEILING));
-    }
-
-    @Test
-    void withdrawTest() throws NotVerifiedCardException, NotEnoughMoneyException {
-        //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
-        atm.enterPin("1234");
-        ((VerifiedCard) atm.getCurrentCard()).setBalance(new BigDecimal(10_000));
-        //given
-        BigDecimal amount = new BigDecimal(6750);
-        //when
-        Map<Integer, Integer> banknotesMap = atm.withdraw(CurrencyCode.RUB, amount);
+        Map<Banknote, Integer> banknotesMap = atm.withdraw(amount);
         //then
         assertThat(banknotesMap)
-                .containsEntry(5000, 1)
-                .containsEntry(1000, 1)
-                .containsEntry(500, 1)
-                .containsEntry(200, 1)
-                .containsEntry(50, 1);
+                .containsEntry(new Banknote(N_5000), 1)
+                .containsEntry(new Banknote(N_1000), 1)
+                .containsEntry(new Banknote(N_500), 1)
+                .containsEntry(new Banknote(N_200), 1)
+                .containsEntry(new Banknote(N_50), 1);
     }
 
 
     @Test
-    void withdrawTestNotEnoughMoney() throws NotVerifiedCardException {
+    void withdrawTestNotEnoughMoney() {
         //given
-        Card card = new Card(bank, new DebitCard());
-        atm.insertCard(card);
-        atm.enterPin("1234");
-        ((VerifiedCard) atm.getCurrentCard()).setBalance(new BigDecimal(10_000));
-        //given
-        BigDecimal amount = new BigDecimal("5000000");
+        int amount = 5_000_000;
         //when
         try {
-            atm.withdraw(CurrencyCode.RUB, amount);
+            atm.withdraw(amount);
         } catch (NotEnoughMoneyException e) {
             //then
             assertThat(e).isNotNull();

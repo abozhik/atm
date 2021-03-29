@@ -20,7 +20,7 @@
         </encoder>
     </appender>
 
-    <logger name="atm" level="INFO">
+    <logger name="ru.andrey.atm" level="INFO">
         <appender-ref ref="FILE" />
     </logger>
 
